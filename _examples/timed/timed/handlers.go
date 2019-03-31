@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/andreyromancev/belt/log"
+
 	"github.com/pkg/errors"
 
 	"github.com/andreyromancev/belt"
@@ -47,11 +49,15 @@ type CheckUser struct {
 	Next belt.Handler
 }
 
+func (CheckUser) String() string {
+	return "CheckUser"
+}
+
 func (h *CheckUser) Handle(ctx context.Context) ([]belt.Handler, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil
-	case <-simulateWork(100):
+	case <-simulateWork():
 		return []belt.Handler{h.Next}, nil
 	}
 }
@@ -65,11 +71,15 @@ type GetObject struct {
 	Message Message
 }
 
+func (GetObject) String() string {
+	return "GetObject"
+}
+
 func (h *GetObject) Handle(ctx context.Context) ([]belt.Handler, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil
-	case <-simulateWork(100): // Find object in db.
+	case <-simulateWork(): // Find object in db.
 		if simulateCondition() { // We have the object.
 			reply := Message{
 				Kind:    "object",
@@ -87,11 +97,15 @@ type SaveObject struct {
 	Message Message
 }
 
+func (SaveObject) String() string {
+	return "SaveObject"
+}
+
 func (h *SaveObject) Handle(ctx context.Context) ([]belt.Handler, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil
-	case <-simulateWork(100): // Save object to db.
+	case <-simulateWork(): // Save object to db.
 		reply := Message{
 			Kind:    "object_id",
 			Payload: fmt.Sprintf("reply for: %s", h.Message.Payload),
@@ -105,11 +119,16 @@ type SendReply struct {
 	Message Message
 }
 
-func (h *SendReply) Handle(context.Context) ([]belt.Handler, error) {
+func (SendReply) String() string {
+	return "SendReply"
+}
+
+func (h *SendReply) Handle(ctx context.Context) ([]belt.Handler, error) {
 	select {
-	case <-simulateTimeout(3):
+	case <-simulateTimeout():
 		return nil, errors.New("timeout")
-	case <-simulateWork(100): // Send reply over network.
+	case <-simulateWork(): // Send reply over network.
+		log.FromContext(ctx).Info("Replied")
 		return nil, nil
 	}
 }
@@ -118,21 +137,28 @@ type Redirect struct {
 	Address string
 }
 
-func (h *Redirect) Handle(context.Context) ([]belt.Handler, error) {
+func (Redirect) String() string {
+	return "Redirect"
+}
+
+func (h *Redirect) Handle(ctx context.Context) ([]belt.Handler, error) {
 	select {
-	case <-simulateTimeout(3):
+	case <-simulateTimeout():
 		return nil, errors.New("timeout")
-	case <-simulateWork(100): // Redirect the requester.
+	case <-simulateWork(): // Redirect the requester.
+		log.FromContext(ctx).Info("Redirected")
 		return nil, nil
 	}
 }
 
-func simulateWork(mSec time.Duration) <-chan time.Time {
-	return time.After(time.Millisecond * mSec)
+func simulateWork() <-chan time.Time {
+	factor := rand.Uint32() % 400
+	return time.After(time.Duration(100*factor) * time.Millisecond)
 }
 
-func simulateTimeout(sec time.Duration) <-chan time.Time {
-	return time.After(time.Second * sec)
+func simulateTimeout() <-chan time.Time {
+	factor := rand.Uint32() % 25
+	return time.After(time.Duration(100*factor) * time.Second)
 }
 
 func simulateCondition() bool {

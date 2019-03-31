@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/andreyromancev/belt"
@@ -18,37 +20,47 @@ func main() {
 	worker := workers.NewWorker(sorter)
 
 	// Generate events.
-	events, done := generateEvents(5 * time.Second)
+	events := generateEvents()
 
 	// Start worker.
 	err := worker.Work(ctx, events)
 	if err != nil {
 		logger.Fatal(err)
 	}
-
-	<-done
 }
 
-func generateEvents(duration time.Duration) (<-chan belt.Event, <-chan struct{}) {
-	done := make(chan struct{})
+func generateEvents() <-chan belt.Event {
 	events := make(chan belt.Event)
-	ticker := time.NewTicker(1 * time.Second)
+	timeChange := time.NewTicker(3 * time.Second)
+	message := time.NewTicker(time.Second)
 
-	// Periodically generate time change.
+	counter := 0
+	// Generate time change.
 	go func() {
-		counter := 1
-		for range ticker.C {
-			events <- timed.TimeChange{Time: counter}
+		for range timeChange.C {
+			events <- timed.TimeChange{Time: counter + 1}
 			counter++
 		}
 	}()
 
-	// Stop generating after duration.
+	// Generate random messages.
 	go func() {
-		<-time.After(duration)
-		ticker.Stop()
-		close(done)
+		for range message.C {
+			msg := timed.Message{
+				Time: counter,
+			}
+			switch rand.Int() % 2 {
+			case 0:
+				id := rand.Uint32()
+				msg.Kind = "get_object"
+				msg.Payload = fmt.Sprintf(`{"id": %d}`, id)
+			case 1:
+				msg.Kind = "save_object"
+				msg.Payload = fmt.Sprintf(`{"hash": "123"}`)
+			}
+			events <- msg
+		}
 	}()
 
-	return events, done
+	return events
 }

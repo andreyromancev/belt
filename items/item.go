@@ -4,6 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/andreyromancev/belt/log"
+
+	"github.com/pkg/errors"
+
 	"github.com/andreyromancev/belt"
 )
 
@@ -47,7 +51,7 @@ func (i *Item) SetContext(ctx context.Context) {
 	i.ctxLock.Unlock()
 }
 
-func (i *Item) MakeChild(h belt.Handler) belt.Item {
+func (i *Item) MakeChild(h belt.Handler) (belt.Item, error) {
 	child := &Item{
 		event:   i.event,
 		handler: h,
@@ -56,12 +60,23 @@ func (i *Item) MakeChild(h belt.Handler) belt.Item {
 	child.setContext(i.context)
 
 	i.chLock.Lock()
+	defer i.chLock.Unlock()
+	select {
+	case <-i.context.Done():
+		return nil, errors.New("canceled")
+	default:
+	}
 	i.children = append(i.children, child)
-	i.chLock.Unlock()
-	return child
+	return child, nil
 }
 
 func (i *Item) Cancel() {
+	i.chLock.RLock()
+	for _, ch := range i.children {
+		ch.Cancel()
+		log.FromContext(i.context).Warn("Item canceled")
+	}
+	i.chLock.RUnlock()
 	i.cancel()
 }
 

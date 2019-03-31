@@ -9,7 +9,7 @@ type Event interface{}
 type Item interface {
 	Event() Event
 	Handler() Handler
-	MakeChild(Handler) Item
+	MakeChild(Handler) (Item, error)
 	Context() context.Context
 	SetContext(ctx context.Context)
 }
@@ -26,6 +26,7 @@ type Slot interface {
 	Middleware() Middleware
 	Reset(state Middleware)
 	AddItem(Item) error
+	RemoveItem(Item) error
 }
 
 type Sorter interface {

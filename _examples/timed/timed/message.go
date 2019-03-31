@@ -11,7 +11,7 @@ type Message struct {
 }
 
 func (m Message) String() string {
-	return m.Payload
+	return fmt.Sprintf("TimeChange{Time: %d, Kind: %s, Payload: %s}", m.Time, m.Kind, m.Payload)
 }
 
 type TimeChange struct {

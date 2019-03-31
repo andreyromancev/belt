@@ -2,7 +2,10 @@ package timed
 
 import (
 	"context"
+	"fmt"
 	"sync"
+
+	"github.com/andreyromancev/belt/log"
 
 	"github.com/andreyromancev/belt/mware"
 
@@ -44,6 +47,9 @@ func (s *Sorter) Sort(ctx context.Context, e belt.Event) (slot belt.Slot, item b
 }
 
 func (s *Sorter) handleMessage(ctx context.Context, msg Message) (slot belt.Slot, item belt.Item, err error) {
+	ctx = context.WithValue(ctx, "Time", s.currentTime)
+	ctx = log.WithLogger(ctx, log.FromContext(ctx).WithField("time", fmt.Sprintf("%d", s.currentTime)))
+
 	slot, err = s.slot(msg.Time)
 	if err != nil {
 		return
@@ -63,7 +69,6 @@ func (s *Sorter) handleMessage(ctx context.Context, msg Message) (slot belt.Slot
 		return
 	}
 
-	ctx = context.WithValue(ctx, "Time", s.currentTime)
 	item = items.NewItem(ctx, msg, handler)
 	return
 }
@@ -113,7 +118,7 @@ func (s *Sorter) slot(time int) (slot belt.Slot, err error) {
 	s.sLock.RLock()
 	slot, ok := s.slots[time]
 	if !ok {
-		err = errors.New("no slot for the message")
+		err = errors.New("no slot for message")
 	}
 	s.sLock.RUnlock()
 	return

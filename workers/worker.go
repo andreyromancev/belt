@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/andreyromancev/belt"
 	"github.com/andreyromancev/belt/log"
@@ -19,9 +20,16 @@ func NewWorker(s belt.Sorter) *Worker {
 }
 
 func (w *Worker) Work(ctx context.Context, items <-chan belt.Event) error {
+	var wg sync.WaitGroup
 	for i := range items {
-		go w.process(ctx, i)
+		wg.Add(1)
+		go func() {
+			w.process(ctx, i)
+			wg.Done()
+		}()
 	}
+
+	wg.Wait()
 	return nil
 }
 
@@ -31,23 +39,49 @@ func (w *Worker) process(ctx context.Context, i belt.Event) {
 	logger.Infof("Received event")
 	slot, item, err := w.sorter.Sort(ctx, i)
 	if err != nil {
-		logger.Error("Sorting failed: ", err)
+		logger.Error("Sorting failed:", err)
 		return
 	}
 	if slot == nil || item == nil {
 		logger.Info("Filtered by sorter")
 		return
 	}
-	handle(slot, item)
+	err = slot.AddItem(item)
+	if err != nil {
+		logger.Error("Failed to add item:", err)
+	}
+	w.handle(slot, item)
 }
 
-func handle(slot belt.Slot, item belt.Item) {
+func (w *Worker) handle(slot belt.Slot, item belt.Item) {
 	m := slot.Middleware()
+	ctx := item.Context()
+	logger := log.FromContext(ctx).WithField("handler", fmt.Sprint(item.Handler()))
+	ctx = log.WithLogger(item.Context(), logger)
+
 	results, err := m.Handle(item.Context(), item.Handler())
 	if err != nil {
-		log.FromContext(item.Context()).Error("Handling failed: ", err)
+		logger.Error("Handler failed:", err)
 	}
+	defer func() {
+		logger.Info("Handler finished")
+	}()
+
+	if len(results) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	wg.Add(len(results))
 	for _, h := range results {
-		go handle(slot, item.MakeChild(h))
+		child, err := item.MakeChild(h)
+		if err != nil {
+			logger.Error("Failed to create child:", err)
+			break
+		}
+		go func() {
+			w.handle(slot, child)
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 }

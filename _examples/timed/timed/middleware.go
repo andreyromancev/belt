@@ -3,6 +3,8 @@ package timed
 import (
 	"context"
 
+	"github.com/andreyromancev/belt/log"
+
 	"github.com/andreyromancev/belt/mware"
 
 	"github.com/pkg/errors"
@@ -27,6 +29,7 @@ var FutureMiddleware mware.Func = func(ctx context.Context, h belt.Handler) ([]b
 		return f.Future(ctx)
 	}
 
+	log.FromContext(ctx).Info("Waiting for present")
 	// Future waits for reset by default.
 	<-ctx.Done()
 	return []belt.Handler{h}, nil
