@@ -2,28 +2,31 @@ package items
 
 import (
 	"context"
-	"github.com/andreyromancev/belt"
 	"sync"
+
+	"github.com/andreyromancev/belt"
 )
 
 type Item struct {
-	event belt.Event
+	event   belt.Event
 	handler belt.Handler
-	parent *Item
+	parent  *Item
 
 	ctxLock sync.RWMutex
 	context context.Context
-	cancel context.CancelFunc
+	cancel  context.CancelFunc
 
-	chLock sync.RWMutex
+	chLock   sync.RWMutex
 	children []*Item
 }
 
-func NewItem(e belt.Event, h belt.Handler) *Item {
-	return &Item{
-		event: e,
+func NewItem(ctx context.Context, e belt.Event, h belt.Handler) *Item {
+	i := &Item{
+		event:   e,
 		handler: h,
 	}
+	i.SetContext(ctx)
+	return i
 }
 
 func (i *Item) Event() belt.Event {
@@ -39,20 +42,19 @@ func (i *Item) Context() context.Context {
 }
 
 func (i *Item) SetContext(ctx context.Context) {
-	ctx, c := context.WithCancel(ctx)
 	i.ctxLock.Lock()
-	i.context = ctx
-	i.cancel = c
+	i.setContext(ctx)
 	i.ctxLock.Unlock()
 }
 
 func (i *Item) MakeChild(h belt.Handler) belt.Item {
 	child := &Item{
-		event: i.event,
+		event:   i.event,
 		handler: h,
-		context: i.context,
-		parent: i,
+		parent:  i,
 	}
+	child.setContext(i.context)
+
 	i.chLock.Lock()
 	i.children = append(i.children, child)
 	i.chLock.Unlock()
@@ -60,7 +62,11 @@ func (i *Item) MakeChild(h belt.Handler) belt.Item {
 }
 
 func (i *Item) Cancel() {
-	i.ctxLock.RLock()
 	i.cancel()
-	i.ctxLock.RUnlock()
+}
+
+func (i *Item) setContext(ctx context.Context) {
+	ctx, c := context.WithCancel(ctx)
+	i.context = ctx
+	i.cancel = c
 }

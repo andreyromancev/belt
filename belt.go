@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-type Event interface {}
+type Event interface{}
 
 type Item interface {
 	Event() Event
@@ -28,11 +28,12 @@ type Middleware interface {
 
 type Slot interface {
 	Middleware() Middleware
+	Reset(state Middleware)
 	AddItem(Item) error
 }
 
 type Sorter interface {
-	Sort(Event) (Slot, Item, error)
+	Sort(context.Context, Event) (Slot, Item, error)
 }
 
 type Worker interface {

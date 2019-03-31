@@ -1,18 +1,19 @@
 package slots
 
 import (
-	"github.com/andreyromancev/belt"
 	"sync"
+
+	"github.com/andreyromancev/belt"
 )
 
 type Slot struct {
-	state belt.Middleware
-	iLock sync.RWMutex
-	items []belt.Item
+	middleware belt.Middleware
+	iLock      sync.RWMutex
+	items      []belt.Item
 }
 
-func NewSlot() *Slot {
-	return &Slot{}
+func NewSlot(m belt.Middleware) *Slot {
+	return &Slot{middleware: m}
 }
 
 func (s *Slot) AddItem(i belt.Item) error {
@@ -23,10 +24,10 @@ func (s *Slot) AddItem(i belt.Item) error {
 }
 
 func (s *Slot) Middleware() belt.Middleware {
-	return s.state
+	return s.middleware
 }
 
-func (s *Slot) SetMiddleware(state belt.Middleware) error {
+func (s *Slot) Reset(state belt.Middleware) {
 	s.iLock.RLock()
 	for _, i := range s.items {
 		if c, ok := i.(belt.Canceler); ok {
@@ -34,6 +35,5 @@ func (s *Slot) SetMiddleware(state belt.Middleware) error {
 		}
 	}
 	s.iLock.RUnlock()
-	s.state = state
-	return nil
+	s.middleware = state
 }

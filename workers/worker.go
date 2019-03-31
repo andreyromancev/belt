@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+
 	"github.com/andreyromancev/belt"
 )
 
@@ -23,10 +24,9 @@ func (w *Worker) Work(ctx context.Context, items <-chan belt.Event) error {
 }
 
 func (w *Worker) process(ctx context.Context, i belt.Event) {
-	slot, item, _ := w.sorter.Sort(i)
-	item.SetContext(ctx)
-	// TODO: log errors
+	slot, item, _ := w.sorter.Sort(ctx, i)
 	_ = handle(slot, item)
+	// TODO: log errors
 }
 
 func handle(slot belt.Slot, item belt.Item) error {
