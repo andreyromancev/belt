@@ -14,10 +14,6 @@ type Item interface {
 	SetContext(ctx context.Context)
 }
 
-type Canceler interface {
-	Cancel()
-}
-
 type Handler interface {
 	Handle(context.Context) ([]Handler, error)
 }
@@ -38,4 +34,8 @@ type Sorter interface {
 
 type Worker interface {
 	Work(ctx context.Context, items <-chan Event) error
+}
+
+type Canceler interface {
+	Cancel()
 }

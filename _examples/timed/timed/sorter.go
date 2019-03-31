@@ -32,24 +32,24 @@ func NewSorter(time int) *Sorter {
 
 func (s *Sorter) Sort(ctx context.Context, e belt.Event) (slot belt.Slot, item belt.Item, err error) {
 	switch event := e.(type) {
-	case *Message:
+	case Message:
 		return s.handleMessage(ctx, event)
-	case *TimeChange:
-		err = s.changeTime(event.time)
+	case TimeChange:
+		err = s.changeTime(event.Time)
+		return
 	default:
 		err = errors.New("unknown event type")
+		return
 	}
-
-	return
 }
 
-func (s *Sorter) handleMessage(ctx context.Context, msg *Message) (slot belt.Slot, item belt.Item, err error) {
-	slot, err = s.slot(msg.time)
+func (s *Sorter) handleMessage(ctx context.Context, msg Message) (slot belt.Slot, item belt.Item, err error) {
+	slot, err = s.slot(msg.Time)
 	if err != nil {
 		return
 	}
 	var handler belt.Handler
-	switch msg.time {
+	switch msg.Time {
 	case s.currentTime - 1:
 		handler, err = PastInit(msg)
 	case s.currentTime:
@@ -57,13 +57,13 @@ func (s *Sorter) handleMessage(ctx context.Context, msg *Message) (slot belt.Slo
 	case s.currentTime + 1:
 		handler, err = FutureInit(msg)
 	default:
-		err = errors.New("wrong time")
+		err = errors.New("wrong Time")
 	}
 	if err != nil {
 		return
 	}
 
-	ctx = context.WithValue(ctx, "time", s.currentTime)
+	ctx = context.WithValue(ctx, "Time", s.currentTime)
 	item = items.NewItem(ctx, msg, handler)
 	return
 }
@@ -73,7 +73,7 @@ func (s *Sorter) changeTime(newTime int) error {
 	defer s.sLock.Unlock()
 
 	if newTime != s.currentTime+1 {
-		return errors.New("incorrect time")
+		return errors.New("incorrect Time")
 	}
 
 	// Deactivate past.
@@ -99,7 +99,7 @@ func (s *Sorter) changeTime(newTime int) error {
 		delete(s.slots, s.currentTime+1)
 	}
 
-	// Update time.
+	// Update Time.
 	s.currentTime = newTime
 
 	// Create future.

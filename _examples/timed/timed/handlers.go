@@ -11,13 +11,13 @@ import (
 	"github.com/andreyromancev/belt"
 )
 
-func FutureInit(msg *Message) (belt.Handler, error) {
+func FutureInit(msg Message) (belt.Handler, error) {
 	// Same as present. Handlers define future functions themselves.
 	return PresentInit(msg)
 }
 
-func PresentInit(msg *Message) (belt.Handler, error) {
-	switch msg.kind {
+func PresentInit(msg Message) (belt.Handler, error) {
+	switch msg.Kind {
 	case "get_object":
 		return &CheckUser{Next: &GetObject{Message: msg}}, nil
 	case "save_object":
@@ -27,15 +27,15 @@ func PresentInit(msg *Message) (belt.Handler, error) {
 	}
 }
 
-func PastInit(msg *Message) (belt.Handler, error) {
-	switch msg.kind {
+func PastInit(msg Message) (belt.Handler, error) {
+	switch msg.Kind {
 	case "get_object":
 		return &CheckUser{Next: &GetObject{Message: msg}}, nil
 	case "save_object":
 		msg := Message{
-			kind:    "error",
-			payload: "save in the past is forbidden",
-			time:    msg.time,
+			Kind:    "error",
+			Payload: "save in the past is forbidden",
+			Time:    msg.Time,
 		}
 		return &SendReply{Message: msg}, nil
 	default:
@@ -56,13 +56,13 @@ func (h *CheckUser) Handle(ctx context.Context) ([]belt.Handler, error) {
 	}
 }
 
-// CheckUser can be done in the future to save time for further handling.
+// CheckUser can be done in the future to save Time for further handling.
 func (h *CheckUser) Future(ctx context.Context) ([]belt.Handler, error) {
 	return h.Handle(ctx)
 }
 
 type GetObject struct {
-	Message *Message
+	Message Message
 }
 
 func (h *GetObject) Handle(ctx context.Context) ([]belt.Handler, error) {
@@ -72,9 +72,9 @@ func (h *GetObject) Handle(ctx context.Context) ([]belt.Handler, error) {
 	case <-simulateWork(100): // Find object in db.
 		if simulateCondition() { // We have the object.
 			reply := Message{
-				kind:    "object",
-				payload: fmt.Sprintf("reply for: %s", h.Message.payload),
-				time:    ctx.Value("time").(int),
+				Kind:    "object",
+				Payload: fmt.Sprintf("reply for: %s", h.Message.Payload),
+				Time:    ctx.Value("Time").(int),
 			}
 			return []belt.Handler{&SendReply{Message: reply}}, nil
 		} else {
@@ -84,7 +84,7 @@ func (h *GetObject) Handle(ctx context.Context) ([]belt.Handler, error) {
 }
 
 type SaveObject struct {
-	Message *Message
+	Message Message
 }
 
 func (h *SaveObject) Handle(ctx context.Context) ([]belt.Handler, error) {
@@ -93,9 +93,9 @@ func (h *SaveObject) Handle(ctx context.Context) ([]belt.Handler, error) {
 		return nil, nil
 	case <-simulateWork(100): // Save object to db.
 		reply := Message{
-			kind:    "object_id",
-			payload: fmt.Sprintf("reply for: %s", h.Message.payload),
-			time:    ctx.Value("time").(int),
+			Kind:    "object_id",
+			Payload: fmt.Sprintf("reply for: %s", h.Message.Payload),
+			Time:    ctx.Value("Time").(int),
 		}
 		return []belt.Handler{&SendReply{Message: reply}}, nil
 	}

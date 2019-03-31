@@ -1,11 +1,23 @@
 package timed
 
+import (
+	"fmt"
+)
+
 type Message struct {
-	time    int
-	kind    string
-	payload string
+	Time    int
+	Kind    string
+	Payload string
+}
+
+func (m Message) String() string {
+	return m.Payload
 }
 
 type TimeChange struct {
-	time int
+	Time int
+}
+
+func (t TimeChange) String() string {
+	return fmt.Sprintf("TimeChange{Time: %d}", t.Time)
 }

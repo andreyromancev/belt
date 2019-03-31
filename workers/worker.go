@@ -2,8 +2,10 @@ package workers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/andreyromancev/belt"
+	"github.com/andreyromancev/belt/log"
 )
 
 type Worker struct {
@@ -24,23 +26,28 @@ func (w *Worker) Work(ctx context.Context, items <-chan belt.Event) error {
 }
 
 func (w *Worker) process(ctx context.Context, i belt.Event) {
-	slot, item, _ := w.sorter.Sort(ctx, i)
-	_ = handle(slot, item)
-	// TODO: log errors
+	logger := log.FromContext(ctx).WithField("event", fmt.Sprint(i))
+	ctx = log.WithLogger(ctx, logger)
+	logger.Infof("Received event")
+	slot, item, err := w.sorter.Sort(ctx, i)
+	if err != nil {
+		logger.Error("Sorting failed: ", err)
+		return
+	}
+	if slot == nil || item == nil {
+		logger.Info("Filtered by sorter")
+		return
+	}
+	handle(slot, item)
 }
 
-func handle(slot belt.Slot, item belt.Item) error {
+func handle(slot belt.Slot, item belt.Item) {
 	m := slot.Middleware()
 	results, err := m.Handle(item.Context(), item.Handler())
 	if err != nil {
-		return err
+		log.FromContext(item.Context()).Error("Handling failed: ", err)
 	}
 	for _, h := range results {
-		err := handle(slot, item.MakeChild(h))
-		if err != nil {
-			return err
-		}
+		go handle(slot, item.MakeChild(h))
 	}
-
-	return nil
 }
