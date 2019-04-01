@@ -38,7 +38,7 @@ func (s *Sorter) Sort(ctx context.Context, e belt.Event) (slot belt.Slot, item b
 	case Message:
 		return s.handleMessage(ctx, event)
 	case TimeChange:
-		err = s.changeTime(event.Time)
+		err = s.changeTime()
 		return
 	default:
 		err = errors.New("unknown event type")
@@ -73,13 +73,9 @@ func (s *Sorter) handleMessage(ctx context.Context, msg Message) (slot belt.Slot
 	return
 }
 
-func (s *Sorter) changeTime(newTime int) error {
+func (s *Sorter) changeTime() error {
 	s.sLock.Lock()
 	defer s.sLock.Unlock()
-
-	if newTime != s.currentTime+1 {
-		return errors.New("incorrect Time")
-	}
 
 	// Deactivate past.
 	if past, ok := s.slots[s.currentTime-1]; ok {
@@ -93,19 +89,15 @@ func (s *Sorter) changeTime(newTime int) error {
 	// Move present to past.
 	if present, ok := s.slots[s.currentTime]; ok {
 		present.Reset(PastMiddleware)
-		s.slots[s.currentTime-1] = present
-		delete(s.slots, s.currentTime)
 	}
 
 	// Move future to present.
 	if future, ok := s.slots[s.currentTime+1]; ok {
 		future.Reset(PresentMiddleware)
-		s.slots[s.currentTime] = future
-		delete(s.slots, s.currentTime+1)
 	}
 
 	// Update Time.
-	s.currentTime = newTime
+	s.currentTime += 1
 
 	// Create future.
 	slot := slots.NewSlot(FutureMiddleware)
@@ -122,4 +114,8 @@ func (s *Sorter) slot(time int) (slot belt.Slot, err error) {
 	}
 	s.sLock.RUnlock()
 	return
+}
+
+func (s *Sorter) Time() int {
+	return s.currentTime
 }

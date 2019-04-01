@@ -2,11 +2,10 @@ package items
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/andreyromancev/belt/log"
-
-	"github.com/pkg/errors"
 
 	"github.com/andreyromancev/belt"
 )
@@ -16,11 +15,9 @@ type Item struct {
 	handler belt.Handler
 	parent  *Item
 
-	ctxLock sync.RWMutex
-	context context.Context
-	cancel  context.CancelFunc
-
-	chLock   sync.RWMutex
+	lock     sync.RWMutex
+	context  context.Context
+	cancel   context.CancelFunc
 	children []*Item
 }
 
@@ -42,42 +39,40 @@ func (i *Item) Handler() belt.Handler {
 }
 
 func (i *Item) Context() context.Context {
+	i.lock.RLock()
+	defer i.lock.RUnlock()
 	return i.context
 }
 
 func (i *Item) SetContext(ctx context.Context) {
-	i.ctxLock.Lock()
+	i.lock.Lock()
 	i.setContext(ctx)
-	i.ctxLock.Unlock()
+	i.lock.Unlock()
 }
 
 func (i *Item) MakeChild(h belt.Handler) (belt.Item, error) {
-	child := &Item{
-		event:   i.event,
-		handler: h,
-		parent:  i,
-	}
-	child.setContext(i.context)
+	i.lock.Lock()
+	defer i.lock.Unlock()
 
-	i.chLock.Lock()
-	defer i.chLock.Unlock()
 	select {
 	case <-i.context.Done():
 		return nil, errors.New("canceled")
 	default:
+	}
+
+	child := &Item{
+		event:   i.event,
+		handler: h,
+		parent:  i,
+		context: i.context,
 	}
 	i.children = append(i.children, child)
 	return child, nil
 }
 
 func (i *Item) Cancel() {
-	i.chLock.RLock()
-	for _, ch := range i.children {
-		ch.Cancel()
-		log.FromContext(i.context).Warn("Item canceled")
-	}
-	i.chLock.RUnlock()
 	i.cancel()
+	log.FromContext(i.context).Warn("Item canceled")
 }
 
 func (i *Item) setContext(ctx context.Context) {

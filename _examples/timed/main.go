@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base32"
 	"fmt"
 	"math/rand"
 	"time"
@@ -20,7 +21,7 @@ func main() {
 	worker := workers.NewWorker(sorter)
 
 	// Generate events.
-	events := generateEvents()
+	events := generateEvents(sorter)
 
 	// Start worker.
 	err := worker.Work(ctx, events)
@@ -29,17 +30,15 @@ func main() {
 	}
 }
 
-func generateEvents() <-chan belt.Event {
+func generateEvents(sorter *timed.Sorter) <-chan belt.Event {
 	events := make(chan belt.Event)
 	timeChange := time.NewTicker(3 * time.Second)
-	message := time.NewTicker(time.Second)
+	message := time.NewTicker(1 * time.Second)
 
-	counter := 0
 	// Generate time change.
 	go func() {
 		for range timeChange.C {
-			events <- timed.TimeChange{Time: counter + 1}
-			counter++
+			events <- timed.TimeChange{}
 		}
 	}()
 
@@ -47,7 +46,7 @@ func generateEvents() <-chan belt.Event {
 	go func() {
 		for range message.C {
 			msg := timed.Message{
-				Time: counter,
+				Time: sorter.Time(),
 			}
 			switch rand.Int() % 2 {
 			case 0:
@@ -55,8 +54,10 @@ func generateEvents() <-chan belt.Event {
 				msg.Kind = "get_object"
 				msg.Payload = fmt.Sprintf(`{"id": %d}`, id)
 			case 1:
+				data := make([]byte, 10)
+				rand.Read(data)
 				msg.Kind = "save_object"
-				msg.Payload = fmt.Sprintf(`{"hash": "123"}`)
+				msg.Payload = fmt.Sprintf(`{"hash": "%s"}`, base32.StdEncoding.EncodeToString(data))
 			}
 			events <- msg
 		}

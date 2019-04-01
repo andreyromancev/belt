@@ -11,13 +11,12 @@ type Message struct {
 }
 
 func (m Message) String() string {
-	return fmt.Sprintf("TimeChange{Time: %d, Kind: %s, Payload: %s}", m.Time, m.Kind, m.Payload)
+	return fmt.Sprintf("Message{Time: %d, Kind: %s, Payload: %s}", m.Time, m.Kind, m.Payload)
 }
 
 type TimeChange struct {
-	Time int
 }
 
 func (t TimeChange) String() string {
-	return fmt.Sprintf("TimeChange{Time: %d}", t.Time)
+	return fmt.Sprintf("TimeChange{}")
 }

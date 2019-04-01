@@ -152,12 +152,12 @@ func (h *Redirect) Handle(ctx context.Context) ([]belt.Handler, error) {
 }
 
 func simulateWork() <-chan time.Time {
-	factor := rand.Uint32() % 400
+	factor := rand.Uint32() % 10
 	return time.After(time.Duration(100*factor) * time.Millisecond)
 }
 
 func simulateTimeout() <-chan time.Time {
-	factor := rand.Uint32() % 25
+	factor := rand.Uint32() % 5
 	return time.After(time.Duration(100*factor) * time.Second)
 }
 

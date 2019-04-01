@@ -51,6 +51,7 @@ func (w *Worker) process(ctx context.Context, i belt.Event) {
 		logger.Error("Failed to add item:", err)
 	}
 	w.handle(slot, item)
+	logger.Info("Finished event")
 }
 
 func (w *Worker) handle(slot belt.Slot, item belt.Item) {
@@ -59,6 +60,7 @@ func (w *Worker) handle(slot belt.Slot, item belt.Item) {
 	logger := log.FromContext(ctx).WithField("handler", fmt.Sprint(item.Handler()))
 	ctx = log.WithLogger(item.Context(), logger)
 
+	logger.Info("Handler started")
 	results, err := m.Handle(item.Context(), item.Handler())
 	if err != nil {
 		logger.Error("Handler failed:", err)
