@@ -2,6 +2,7 @@ package mware
 
 import (
 	"context"
+
 	"github.com/andreyromancev/belt"
 )
 
@@ -17,24 +18,24 @@ func (m *Chain) AddMiddleware(s belt.Middleware) {
 	m.chain = append(m.chain, s)
 }
 
-func (m *Chain) Handle(ctx context.Context, h belt.Handler) (results []belt.Handler, err error) {
-	err = m.handle(ctx, &results, 0, h)
+func (m *Chain) Handle(ctx context.Context, i belt.Item) (results []belt.Handler, err error) {
+	err = m.handle(ctx, &results, 0, i, i.Handler())
 	return
 }
 
-func (m *Chain) handle(ctx context.Context, total *[]belt.Handler, mIndex int, handler belt.Handler) error {
+func (m *Chain) handle(ctx context.Context, total *[]belt.Handler, mIndex int, item belt.Item, handler belt.Handler) error {
 	if mIndex >= len(m.chain) {
 		*total = append(*total, handler)
 		return nil
 	}
 
 	state := m.chain[mIndex]
-	results, err := state.Handle(ctx, handler)
+	results, err := state.Handle(ctx, item)
 	if err != nil {
 		return err
 	}
 	for _, res := range results {
-		err := m.handle(ctx, total, mIndex + 1, res)
+		err := m.handle(ctx, total, mIndex+1, item, res)
 		if err != nil {
 			return err
 		}

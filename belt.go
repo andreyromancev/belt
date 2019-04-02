@@ -19,7 +19,7 @@ type Handler interface {
 }
 
 type Middleware interface {
-	Handle(context.Context, Handler) ([]Handler, error)
+	Handle(context.Context, Item) ([]Handler, error)
 }
 
 type Slot interface {

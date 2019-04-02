@@ -61,7 +61,7 @@ func (w *Worker) handle(slot belt.Slot, item belt.Item) {
 	ctx = log.WithLogger(item.Context(), logger)
 
 	logger.Info("Handler started")
-	results, err := m.Handle(item.Context(), item.Handler())
+	results, err := m.Handle(item.Context(), item)
 	if err != nil {
 		logger.Error("Handler failed:", err)
 	}
