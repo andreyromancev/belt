@@ -11,6 +11,12 @@ import (
 var Done uint64
 var Migrate uint64
 
+var MapCounter uint64
+var MapLock sync.RWMutex
+var Map map[uint64]*State
+
+const enableMap bool = true
+
 type Handle func(Controller)
 
 type Controller interface {
@@ -88,6 +94,7 @@ func (a *adapter) Adapt() {
 }
 
 type State struct {
+	id       uint64
 	stash    []*adapter
 	fatState []byte
 }
@@ -134,14 +141,35 @@ func (s *State) MigrateToPast(c Controller) {
 }
 
 func (s *State) Done() {
+	if enableMap {
+		MapLock.RLock()
+		me, ok := Map[s.id]
+		_ = me
+		_ = ok
+		MapLock.RUnlock()
+	}
 	atomic.AddUint64(&Done, 1)
 }
 
 func worker(cancel <-chan struct{}) {
-	c := &controller{cancel: cancel, adapters: map[Adapter]chan struct{}{}}
 	init := &State{}
+	if enableMap {
+		MapLock.Lock()
+		MapCounter++
+		init.id = MapCounter
+		Map[MapCounter] = init
+		MapLock.Unlock()
+	}
+
+	c := &controller{cancel: cancel, adapters: map[Adapter]chan struct{}{}}
 	// Switch by pulse.
 	handle(init.Present, c)
+
+	if enableMap {
+		MapLock.Lock()
+		delete(Map, init.id)
+		MapLock.Unlock()
+	}
 }
 
 func handle(h Handle, c *controller) {
@@ -163,6 +191,7 @@ func main() {
 		pulseTime  = 10
 		pulseCount = 5
 	)
+	Map = map[uint64]*State{}
 	pulseCounter := pulseCount
 	pulseTicker := time.NewTicker(pulseTime * time.Second)
 	cancel := make(chan struct{})
@@ -181,9 +210,7 @@ func main() {
 	start := time.Now()
 	for pulseCounter > 0 {
 		<-time.After(5 * time.Microsecond)
-		go func() {
-			worker(cancel)
-		}()
+		go worker(cancel)
 	}
 	t := time.Now()
 	elapsed := t.Sub(start)

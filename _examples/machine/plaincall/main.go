@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -16,7 +15,7 @@ type Handle func(Controller)
 
 type Controller interface {
 	YieldFirst(migrate Handle, first Adapter, rest ...Adapter)
-	YieldAll(migrate Handle, first Adapter, rest ...Adapter) error
+	YieldAll(migrate Handle, first Adapter, rest ...Adapter)
 	Wait(migrate Handle)
 }
 
@@ -28,8 +27,7 @@ type controller struct {
 
 type cancelPanic struct{}
 
-func (c *controller) YieldFirst(migrate Handle, first Adapter, rest ...Adapter) {
-	panic("implement me")
+func (c *controller) Pass() {
 }
 
 func (c *controller) Wait(migrate Handle) {
@@ -38,7 +36,7 @@ func (c *controller) Wait(migrate Handle) {
 	panic(cancelPanic{})
 }
 
-func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) error {
+func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) {
 	c.migrateTo = migrate
 
 	all := append(rest, first)
@@ -49,7 +47,7 @@ func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) er
 		if d, ok := c.adapters[a]; ok {
 			<-d
 			wg.Done()
-			return nil
+			return
 		}
 
 		done := make(chan struct{})
@@ -70,10 +68,8 @@ func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) er
 	select {
 	case <-c.cancel:
 		panic(cancelPanic{})
-		return errors.New("interrupted")
 	case <-done:
 	}
-	return nil
 }
 
 type Adapter interface {
@@ -91,17 +87,18 @@ func (a *adapter) Adapt() {
 }
 
 type State struct {
-	stash    []*adapter
-	fatState []byte
+	controller *controller
+	stash      []*adapter
+	fatState   []byte
 }
 
-func (s *State) Future(c Controller) {
-	c.Wait(s.Present)
+func (s *State) Future() {
+	s.Present()
 }
 
-func (s *State) Present(c Controller) {
+func (s *State) Present() {
 	// fmt.Println("started")
-	fatStack := make([]byte, 100*1000)
+	fatStack := make([]byte, 10*1000)
 	s.fatState = make([]byte, 10*1000)
 	var nostash []*adapter
 	s.stash = append(s.stash, &adapter{request: "test"})
@@ -112,72 +109,51 @@ func (s *State) Present(c Controller) {
 	nostash = append(nostash, &adapter{request: "test"})
 	nostash = append(nostash, &adapter{request: "test"})
 	fatAdapter := &adapter{request: string(fatStack)}
-	err := c.YieldAll(s.MigrateToPast, s.stash[0], nostash[2])
-	if err != nil {
-		return
-	}
+	s.MigrateToPast()
 
 	if rand.Int()%2 == 0 {
-		err = c.YieldAll(s.MigrateToPast, s.stash[1])
-		if err != nil {
-			return
-		}
+		s.MigrateToPast(fatAdapter)
 	} else {
-		err = c.YieldAll(s.Past, fatAdapter)
-		if err != nil {
-			return
-		}
-		// c.Wait(s.Past)
+		s.Past()
 	}
 	// fmt.Println("present result: ", s.keep.result, " ", discard.result)
 
 	s.Done()
 }
 
-func (s *State) Past(c Controller) {
-	err := c.YieldAll(s.MigrateToPast, s.stash[0])
-	if err != nil {
-		s.Done()
-		return
-	}
-	s.Done()
+func (s *State) Past() {
+	s.MigrateToPast()
+	//s.Done()
 }
 
-func (s *State) MigrateToPast(c Controller) {
-	// fmt.Println("migrated to past")
-	err := c.YieldAll(nil, s.stash[1])
-	if err != nil {
-		s.Done()
-		return
-	}
-	s.Done()
-	// fmt.Println("past result: ", s.keep.result)
+func (s *State) MigrateToPast(a ...interface{}) {
+	//s.Done()
 }
 
 func (s *State) Done() {
 	atomic.AddUint64(&Done, 1)
 }
 
-func worker(cancel <-chan struct{}) {
-	c := &controller{cancel: cancel, adapters: map[Adapter]chan struct{}{}}
-	init := &State{}
-	// Switch by pulse.
-	handle(init.Present, c)
-}
+// func worker(cancel <-chan struct{}) {
+// 	c := &controller{cancel: cancel, adapters: map[Adapter]chan struct{}{}}
+// 	init := &State{}
+// 	// Switch by pulse.
+// 	handle(init.Present, c)
+// }
 
-func handle(h Handle, c *controller) {
-	defer func() {
-		if r := recover(); r != nil && c.migrateTo != nil {
-			if _, ok := r.(cancelPanic); ok {
-				atomic.AddUint64(&Migrate, 1)
-				handle(c.migrateTo, c)
-			} else {
-				panic(r)
-			}
-		}
-	}()
-	h(c)
-}
+// func handle(h Handle, c *controller) {
+// 	defer func() {
+// 		if r := recover(); r != nil && c.migrateTo != nil {
+// 			if _, ok := r.(cancelPanic); ok {
+// 				atomic.AddUint64(&Migrate, 1)
+// 				handle(c.migrateTo, c)
+// 			} else {
+// 				panic(r)
+// 			}
+// 		}
+// 	}()
+// 	h(c)
+// }
 
 func main() {
 	const (
@@ -202,7 +178,11 @@ func main() {
 	start := time.Now()
 	for pulseCounter > 0 {
 		<-time.After(5 * time.Microsecond)
-		go worker(cancel)
+		go func() {
+			c := &controller{cancel: cancel, adapters: map[Adapter]chan struct{}{}}
+			s := &State{controller: c}
+			s.Present()
+		}()
 	}
 	t := time.Now()
 	elapsed := t.Sub(start)
