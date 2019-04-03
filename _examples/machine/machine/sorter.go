@@ -1,4 +1,4 @@
-package timed
+package machine
 
 import (
 	"context"
