@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -15,7 +16,7 @@ type Handle func(Controller)
 
 type Controller interface {
 	YieldFirst(migrate Handle, first Adapter, rest ...Adapter)
-	YieldAll(migrate Handle, first Adapter, rest ...Adapter)
+	YieldAll(migrate Handle, first Adapter, rest ...Adapter) error
 	Wait(migrate Handle)
 }
 
@@ -37,7 +38,7 @@ func (c *controller) Wait(migrate Handle) {
 	panic(cancelPanic{})
 }
 
-func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) {
+func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) error {
 	c.migrateTo = migrate
 
 	all := append(rest, first)
@@ -48,7 +49,7 @@ func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) {
 		if d, ok := c.adapters[a]; ok {
 			<-d
 			wg.Done()
-			return
+			return nil
 		}
 
 		done := make(chan struct{})
@@ -69,8 +70,10 @@ func (c *controller) YieldAll(migrate Handle, first Adapter, rest ...Adapter) {
 	select {
 	case <-c.cancel:
 		panic(cancelPanic{})
+		return errors.New("interrupted")
 	case <-done:
 	}
+	return nil
 }
 
 type Adapter interface {
@@ -88,8 +91,7 @@ func (a *adapter) Adapt() {
 }
 
 type State struct {
-	stash    []*adapter
-	fatState []byte
+	stash []*adapter
 }
 
 func (s *State) Future(c Controller) {
@@ -98,8 +100,7 @@ func (s *State) Future(c Controller) {
 
 func (s *State) Present(c Controller) {
 	// fmt.Println("started")
-	fatStack := make([]byte, 10*1000)
-	s.fatState = make([]byte, 10*1000)
+	fatStack := make([]byte, 100*1000)
 	var nostash []*adapter
 	s.stash = append(s.stash, &adapter{request: "test"})
 	s.stash = append(s.stash, &adapter{request: "test"})
@@ -109,12 +110,22 @@ func (s *State) Present(c Controller) {
 	nostash = append(nostash, &adapter{request: "test"})
 	nostash = append(nostash, &adapter{request: "test"})
 	fatAdapter := &adapter{request: string(fatStack)}
-	c.YieldAll(s.MigrateToPast, s.stash[0], nostash[2])
+	err := c.YieldAll(s.MigrateToPast, s.stash[0], nostash[2])
+	if err != nil {
+		return
+	}
 
 	if rand.Int()%2 == 0 {
-		c.YieldAll(s.MigrateToPast, fatAdapter)
+		err = c.YieldAll(s.MigrateToPast, s.stash[1])
+		if err != nil {
+			return
+		}
 	} else {
-		c.Wait(s.Past)
+		err = c.YieldAll(s.Past, fatAdapter)
+		if err != nil {
+			return
+		}
+		// c.Wait(s.Past)
 	}
 	// fmt.Println("present result: ", s.keep.result, " ", discard.result)
 
@@ -122,15 +133,23 @@ func (s *State) Present(c Controller) {
 }
 
 func (s *State) Past(c Controller) {
-	c.YieldAll(s.MigrateToPast, s.stash[0])
+	err := c.YieldAll(s.MigrateToPast, s.stash[0])
+	if err != nil {
+		s.Done()
+		return
+	}
 	s.Done()
 }
 
 func (s *State) MigrateToPast(c Controller) {
 	// fmt.Println("migrated to past")
-	c.YieldAll(nil, s.stash[1])
-	// fmt.Println("past result: ", s.keep.result)
+	err := c.YieldAll(nil, s.stash[1])
+	if err != nil {
+		s.Done()
+		return
+	}
 	s.Done()
+	// fmt.Println("past result: ", s.keep.result)
 }
 
 func (s *State) Done() {
@@ -180,10 +199,8 @@ func main() {
 
 	start := time.Now()
 	for pulseCounter > 0 {
-		<-time.After(5 * time.Microsecond)
-		go func() {
-			worker(cancel)
-		}()
+		time.After(10 * time.Millisecond)
+		go worker(cancel)
 	}
 	t := time.Now()
 	elapsed := t.Sub(start)
